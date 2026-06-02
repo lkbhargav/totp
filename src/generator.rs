@@ -1,12 +1,13 @@
 use byteorder::{BigEndian, ByteOrder};
 use chrono::Local;
-use crypto::mac::Mac;
-use crypto::{hmac::Hmac, sha1::Sha1};
 use data_encoding::BASE32;
+use openssl::hash::MessageDigest;
+use openssl::pkey::PKey;
+use openssl::sign::Signer;
 use std::error::Error;
 use std::io::{self, ErrorKind};
 
-pub fn generate_otp_token(token: &str) -> Result<String, Box<Error>> {
+pub fn generate_otp_token(token: &str) -> Result<String, Box<dyn Error>> {
     let now = Local::now().timestamp();
     let timer = (now / 30) as u64;
     let secret_bytes = BASE32.decode(token.as_bytes());
@@ -17,11 +18,11 @@ pub fn generate_otp_token(token: &str) -> Result<String, Box<Error>> {
         }
     };
     let mut buf = [0; 8];
-    let mut hm = Hmac::new(Sha1::new(), &bytes[..]);
     BigEndian::write_u64(&mut buf, timer);
-    hm.input(&buf[..]);
-    let res = hm.result();
-    let result = res.code();
+    let key = PKey::hmac(&bytes[..])?;
+    let mut signer = Signer::new(MessageDigest::sha1(), &key)?;
+    signer.update(&buf[..])?;
+    let result = signer.sign_to_vec()?;
     let offset = match &result.last() {
         Some(l) => *l & 0xf,
         None => {

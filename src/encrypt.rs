@@ -7,7 +7,7 @@ use std::io::{self, ErrorKind};
 pub const GOTP_KEY: &str = "GOTP";
 pub const GOTP_VALUE: &str = "DECRYPT_SUCCESS";
 
-pub fn encrypt_content(content: &str, password: &str) -> Result<(String, String), Box<Error>> {
+pub fn encrypt_content(content: &str, password: &str) -> Result<(String, String), Box<dyn Error>> {
     let cipher = Cipher::aes_256_cbc();
     let mut password = password.as_bytes().to_vec();
     while password.len() < cipher.key_len() {
@@ -31,7 +31,7 @@ pub fn encrypt_content(content: &str, password: &str) -> Result<(String, String)
     ))
 }
 
-pub fn decrypt_content(content: &str, password: &str, iv: &str) -> Result<String, Box<Error>> {
+pub fn decrypt_content(content: &str, password: &str, iv: &str) -> Result<String, Box<dyn Error>> {
     let base64_decoded_content = BASE64.decode(content.as_bytes())?;
     let iv_decoded = BASE64.decode(iv.as_bytes())?;
     let cipher = Cipher::aes_256_cbc();

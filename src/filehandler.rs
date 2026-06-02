@@ -1,5 +1,5 @@
-use encrypt;
-use rpassword::prompt_password_stderr;
+use crate::encrypt;
+use rpassword::prompt_password;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::OpenOptions;
@@ -15,7 +15,7 @@ pub struct FileHandler<'a> {
 
 impl<'a> FileHandler<'a> {
     pub fn init() -> Self {
-        let password = prompt_password_stderr("Password: ").unwrap();
+        let password = prompt_password("Password: ").unwrap();
         Self {
             accounts: HashMap::new(),
             password: password,
@@ -24,7 +24,7 @@ impl<'a> FileHandler<'a> {
     }
 
     pub fn add_account(&mut self, account: String, token: String) {
-        &self.accounts.insert(account, token);
+        self.accounts.insert(account, token);
     }
 
     pub fn save_account_file(&self) {
@@ -48,7 +48,7 @@ impl<'a> FileHandler<'a> {
             .expect("unable to write to account.txt");
     }
 
-    pub fn load_account_file(&mut self) -> Result<(), Box<Error>> {
+    pub fn load_account_file(&mut self) -> Result<(), Box<dyn Error>> {
         let mut file = OpenOptions::new()
             .create(true)
             .read(true)
@@ -64,7 +64,7 @@ impl<'a> FileHandler<'a> {
         }
         let split: Vec<&str> = contents.split(":").collect();
         let content = split[0];
-        let iv = split[1].trim_right();
+        let iv = split[1].trim_end();
         let decrypted_content = encrypt::decrypt_content(content, &self.password[..], iv)?;
         let accounts: Vec<&str> = decrypted_content.split("\n").collect();
         for acc in accounts {
@@ -75,14 +75,13 @@ impl<'a> FileHandler<'a> {
             if acc_split[0] == encrypt::GOTP_KEY {
                 continue;
             }
-            &self
-                .accounts
+            self.accounts
                 .insert(acc_split[0].to_owned(), acc_split[1].to_owned());
         }
         Ok(())
     }
 
-    pub fn get_token(&self, acc: String) -> Result<String, Box<Error>> {
+    pub fn get_token(&self, acc: String) -> Result<String, Box<dyn Error>> {
         if !self.accounts.contains_key(&acc) {
             let s = format!("account {} not found", acc);
             return Err(io::Error::new(ErrorKind::InvalidInput, s).into());
@@ -90,7 +89,7 @@ impl<'a> FileHandler<'a> {
         Ok(self.accounts[&acc].to_owned())
     }
 
-    pub fn delete_account(&mut self, acc: String) -> Result<(), Box<Error>> {
+    pub fn delete_account(&mut self, acc: String) -> Result<(), Box<dyn Error>> {
         if !self.accounts.contains_key(&acc) {
             let s = format!("account {} not found", acc);
             return Err(io::Error::new(ErrorKind::InvalidInput, s).into());

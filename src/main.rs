@@ -1,14 +1,4 @@
-#[macro_use]
-extern crate clap;
-extern crate byteorder;
-extern crate chrono;
-extern crate crypto;
-extern crate data_encoding;
-extern crate hex;
-extern crate openssl;
-extern crate rpassword;
-
-use clap::App;
+use clap::{Arg, Command};
 use std::error::Error;
 
 mod accounting;
@@ -17,16 +7,37 @@ mod encrypt;
 mod generator;
 mod filehandler;
 
-fn main() -> Result<(), Box<Error>> {
-    let yaml = load_yaml!("cli.yml");
-    let matches = App::from_yaml(yaml).get_matches();
+fn main() -> Result<(), Box<dyn Error>> {
+    let account_arg = || {
+        Arg::new("account")
+            .short('a')
+            .long("account")
+            .value_name("account")
+            .help("Generate a TOTP for a given account.")
+    };
+    let matches = Command::new("totp")
+        .version("1.0")
+        .author("Gergely Brautigam")
+        .about("TOTP Token generator on the command line with AES encrypted account handling.")
+        .subcommand(Command::new("add").about("Adds a new account with a TOTP token."))
+        .subcommand(
+            Command::new("generate")
+                .about("Generate a new token for a given account.")
+                .arg(account_arg()),
+        )
+        .subcommand(
+            Command::new("delete")
+                .about("Delete a given account.")
+                .arg(account_arg()),
+        )
+        .get_matches();
     match matches.subcommand() {
-        ("add", Some(_)) => commands::add_account()?,
-        ("generate", Some(token)) => match token.value_of("account") {
+        Some(("add", _)) => commands::add_account()?,
+        Some(("generate", token)) => match token.get_one::<String>("account") {
             Some(acc) => commands::generate_token(acc)?,
             None => println!("Please define an --account to generate a token for"),
         },
-        ("delete", Some(token)) => match token.value_of("account") {
+        Some(("delete", token)) => match token.get_one::<String>("account") {
             Some(acc) => commands::delete_account(acc)?,
             None => println!("Please define an --account to delete"),
         },

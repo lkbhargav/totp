@@ -1,40 +1,84 @@
 # TOTP CLI
 
-A cli TOTP token generator based on RFC-6238.
-[![Build Status](https://travis-ci.org/Skarlso/totp.svg?branch=master)](https://travis-ci.org/Skarlso/totp)
+A command-line TOTP (time-based one-time password) token generator based on
+[RFC-6238](https://datatracker.ietf.org/doc/html/rfc6238). Accounts and their
+secrets are stored in an AES-256-CBC encrypted file, unlocked by a password you
+provide each time you run a command.
 
-# Security
+> **Note on names:** the project builds a binary called `gotp`, but the CLI
+> presents its help under the name `totp`. Examples below use `gotp`. See
+> [Aliases](#aliases) if you'd prefer to call it `totp`.
 
-This CLI never stores a password. It always asks for one. The password is used to manage multiple accounts and tokens via an AES encrypted account file located next to the binary.
-
-# Commands
+## Quick Start
 
 ```bash
-❯ totp help
-totp 1.0
-Gergely Brautigam
-TOTP Token generator on the command line with AES encrypted account handling.
+# Clone and install
+git clone https://github.com/Skarlso/totp.git
+cd totp
+make install          # builds and installs the `gotp` binary into ~/.cargo/bin
 
-USAGE:
-    totp [SUBCOMMAND]
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-SUBCOMMANDS:
-    add         Adds a new account with a TOTP token.
-    delete      Delete a given account.
-    generate    Generate a new token for a given account.
-    help        Prints this message or the help of the given subcommand(s)
+# Add your first account, then generate a code
+gotp add                       # prompts for account name, BASE32 secret, password
+gotp generate -a gmail_main    # prompts for password, prints a 6-digit code
 ```
 
-# Example
+## Prerequisites
 
-First, create an account by using the provided BASE32 encoded TOTP identifier.
+- A recent Rust toolchain — the crate uses `edition = "2024"`, so install via
+  [rustup](https://rustup.rs/) and keep it up to date.
+- OpenSSL, required to build the `openssl` crate:
+  - **macOS:** `brew install openssl` (usually already present).
+  - **Debian/Ubuntu:** `sudo apt install libssl-dev pkg-config`.
+
+## Install
+
+Install the `gotp` binary into `~/.cargo/bin`:
 
 ```bash
-❯ totp add
+make install
+# or, equivalently:
+cargo install --path .
+```
+
+To build locally instead of installing:
+
+```bash
+make build      # debug build
+make release    # optimized build at target/release/gotp
+```
+
+## Security
+
+This CLI never stores your password. It prompts for one on every command. The
+password unlocks an AES-256-CBC encrypted file named `.account.txt`, which holds
+all your account names and TOTP secrets. The file is created in the **current
+working directory**, so run `gotp` from the same directory each time (a stable
+location such as your home directory is a good choice).
+
+`.account.txt` is git-ignored and should never be committed.
+
+## Usage
+
+```bash
+❯ gotp help
+TOTP Token generator on the command line with AES encrypted account handling.
+
+Usage: gotp [COMMAND]
+
+Commands:
+  add       Adds a new account with a TOTP token.
+  generate  Generate a new token for a given account.
+  delete    Delete a given account.
+  help      Print this message or the help of the given subcommand(s)
+```
+
+### Add an account
+
+`add` is interactive. Provide a name for the account and its BASE32-encoded TOTP
+secret (the string a service shows you when enabling 2FA), then your password.
+
+```bash
+❯ gotp add
 account:
 gmail_main
 token:
@@ -42,61 +86,80 @@ MFZWIZQASDFFSFDSIJAAA=
 Password:
 ```
 
-Once this is done, you are ready to use the generator to generate a 6 digit token which changes every 30 seconds.
+### Generate a token
+
+Generates a 6-digit code for the account, valid for 30 seconds.
 
 ```bash
-❯ totp generate -a gmail_main
+❯ gotp generate -a gmail_main
 Password:
 364898
 ```
 
-You can create an alias for that saying something like `gmail_main_token`.
-
-# Tricks
-
-On linux, this also adds the ability to directly pipe the resulting token to clipboard. Ready to be pasted into something else.
+### Delete an account
 
 ```bash
-gmail_main_token|pbcopy
+❯ gotp delete -a gmail_main
 Password:
 ```
 
-Then simply press {CTRL,CMD}+C and voila...
+## Tricks
+
+### Copy a token straight to the clipboard
 
 ```bash
-452987
+# macOS
+gotp generate -a gmail_main | pbcopy
+
+# Linux (X11 / Wayland)
+gotp generate -a gmail_main | xclip -selection clipboard
+gotp generate -a gmail_main | wl-copy
 ```
 
-If you are like me and have many tokens for many accounts, it's tedious to constantly enter the account names.
+Enter your password when prompted, then paste the code wherever you need it.
 
-But that's what aliases are for.
+### Aliases
 
-Save this into your bash.rc or zshrc or whatever, which will create aliases like `gg` and `wgg` for short-codes.
+If you have many accounts, typing the full name each time is tedious. Add helper
+functions to your `.bashrc` / `.zshrc`:
 
 ```bash
 gotp-generate() {
-    gotp generate -a $1
+    gotp generate -a "$1"
 }
 
-gg() {
-    gotp-generate personal.gmail
-}
-
-wgg() {
-    gotp-generate work.gmail
-}
+gg()  { gotp-generate personal.gmail; }
+wgg() { gotp-generate work.gmail; }
 ```
 
-# Compliance to RFC
+To call the binary as `totp`, add an alias:
 
-This generator is in full compliance to the RFC described here: RFC-6238.
-Note: With the expection that right now times, and methods are not configurable. That is in the ROADMAP.
+```bash
+alias totp='gotp'
+```
 
-# Unit Tests
+## Development
 
-~I know, they are missing. And in the works. I'm still learning Rust.~
-Now there are unit tests!
+Common tasks are wrapped in the [`Makefile`](./Makefile):
 
-# Contributions
+```bash
+make help        # list all targets
+make build       # debug build
+make test        # run the test suite
+make fmt         # format with rustfmt
+make lint        # run clippy (fails on warnings)
+make ci          # fmt-check + lint + test (run before committing)
+```
 
-Are welcomed.
+The project ships with unit tests covering encryption, file handling, and token
+generation. Run them with `make test` (or `cargo test`).
+
+## Compliance with the RFC
+
+This generator complies with [RFC-6238](https://datatracker.ietf.org/doc/html/rfc6238),
+with the exception that the time step and HMAC algorithm are currently fixed
+(30-second steps, HMAC-SHA1) and not yet configurable.
+
+## Contributions
+
+Contributions are welcome.
